@@ -9,9 +9,13 @@ end
 @test typeof(add(2, 3)) <: Int64
 @test_throws MethodError add("foo")
 
-println("Multiple return types")
-@typed function noot(): (Bool, Bool)
-    return true, false
-end
+# println("Multiple return types")
+# @typed function noot(): (Bool, Bool)
+#     return true, false
+# end
 
-@test noot() == (true, false)
+# @test TypedFunctions.toarray((Bool,Bool)) == Vector{DataType}([Bool,Bool])
+
+# @test noot.rtyp == DataType[Bool,Bool]
+
+# @test noot() == (true, false)

@@ -7,25 +7,85 @@ export @typed,
 
 import Base.call,
        Base.Func,
-       Base.return_types
+       Base.return_types,
+       Base.show,
+       Base.methods
+
+function toarray(t::Tuple)
+    a = DataType[]
+    for i in t
+        push!(a, i)
+    end
+    a
+end
+
+typealias TypedMethodTable Dict{Function,Array{Method}}
 
 type TypedFunction <: Func
     f::Function
-    sig::Vector{DataType}
-    rtype::Vector{DataType}
+    sig::Tuple
+    rtype::Tuple
+
+    function TypedFunction(f, s, r)
+        if !(typeof(r) <: Tuple) 
+            r = (r,)
+        end
+        tf = new(f, s, r)
+        rets = return_types(tf.f, tf.sig)
+        @assert length(rets) == 1 "Function has more than one return type"
+        rt = first(rets)
+        @show 
+        if !(typeof(rt) <: Tuple) 
+            rt = (rt,)
+        end
+        ttype = typeof(tf.rtype)
+        @assert typeof(rt) == ttype "Expected return value $rt to be of type $ttype"
+        tf
+    end
 end
 
-function TypedFunction(f, s, r)
-    @show s 
-    @show r
+function methods(tf::TypedFunction)
+
 end
 
-# TypedFunction(f::Function, r::Type) = TypedFunction(f, [r])
+function show(io::IO, tf::TypedFunction) 
+    fname = replace(string(tf.f), "__", "")
+    println(io, "$fname (typed function with 11 methods)")
+end
+
+# Whether we get a singular typename, a tuple of typenames, we want to resolve everything
+# to Vector{DataType}
+function resolveReturnType(rt)
+    t = typeof(rt)
+    if t <: Type
+        println("got a singular type")
+        return Vector{DataType}([rt])
+    elseif typeof(t) == DataType && symbol(t.name) == :Tuple
+        println("got a tuple", rt)
+        return toarray(rt)
+    else 
+        error("Invalid return type: $rt")
+    end
+end
+
+# function TypedFunction(f::Function, sig::Vector{DataType}, rt)
+#     t = typeof(rt)
+#     if t <: Type
+#         println("got a singular type")
+#         return TypedFunction(f, sig, Vector{DataType}([rt]))
+#     elseif t <: Tuple
+#         println("got a tuple")
+#         return TypedFunction(f, sig,toarray(rt))
+#     else 
+#         error("Invalid return type: $rt")
+#     end
+# end
 
 function call(tf::TypedFunction, x...)
-    for (i, typ) in enumerate(return_types(tf.f, tf.sig))
-        @assert typ <: tf.rtype[i] "Expected return value $i to be of type $(tf.rtype[i])"
-    end
+    # @show return_types(tf.f, tf.sig)
+    # for (i, typ) in enumerate(return_types(tf.f, tf.sig))
+    #     @assert typ <: tf.rtype[i] "Expected return value $i to be of type $(tf.rtype[i])"
+    # end
     tf.f(x...)
 end
 
@@ -34,7 +94,7 @@ function getsignature(fun::Expr)
     for param in fun.args[1].args[2:end]
         push!(types, param.args[2])
     end
-    types
+    tuple(types...)
 end
 
 macro typed(func)
@@ -48,7 +108,8 @@ macro typed(func)
     fsig = getsignature(func)
     return quote
         typ = $(esc(typeAnno))
-        typ = typeof(typ) <: AbstractVector ? typ : [typ]
+        # typ = typeof(typ) <: Tuple ? [typ...] : typ
+        # typ = typeof(typ) <: AbstractVector ? typ : [typ]
         sig = $(esc(map(eval, fsig)))
         $(esc(func))
         $(esc(fname)) = TypedFunction($(esc(fprivate)), sig, typ)
